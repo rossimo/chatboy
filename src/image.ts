@@ -8,13 +8,11 @@ export const GAMEBOY_CAMERA_WIDTH = 160;
 export const GAMEBOY_CAMERA_HEIGHT = 144;
 
 // Function to get our RGB image data array from our frame
-export const getImageDataFromFrame = async () => {
-    // Get our output frame
-    const frameInProgressVideoOutputLocation = await WasmBoy._getWasmConstant('FRAME_LOCATION');
-    const frameInProgressMemory = await WasmBoy._getWasmMemorySection(
-        frameInProgressVideoOutputLocation,
-        frameInProgressVideoOutputLocation + GAMEBOY_CAMERA_HEIGHT * GAMEBOY_CAMERA_WIDTH * 3 + 1
-    );
+export const getImageDataFromFrame = async (wasmboy: any, wasmByteMemoryArray: Uint8Array) => {
+
+    const frameInProgressMemory = wasmByteMemoryArray.slice(
+        wasmboy.FRAME_LOCATION,
+        wasmboy.FRAME_LOCATION + GAMEBOY_CAMERA_HEIGHT * GAMEBOY_CAMERA_WIDTH * 3 + 1)
 
     // Going to compare pixel values from the VRAM to confirm tests
     const imageDataArray = [];
