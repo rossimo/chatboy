@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 
 export const initWasmBoy = async () => {
-        // Log throttling for our core
+    // Log throttling for our core
     // The same log can't be output more than once every half second
-    let logRequest = {};
+    const logRequest = {};
 
     const logTimeout = (id, message, timeout) => {
         if (!logRequest[id]) {
@@ -46,4 +46,75 @@ export const initWasmBoy = async () => {
         wasmboy,
         wasmboyMemory
     }
+};
+
+export const loadRom = (wasmboy: any, wasmboyMemory, rom: Uint8Array) => {
+    wasmboyMemory.set(rom, wasmboy.CARTRIDGE_ROM_LOCATION);
+}
+
+export const loadState = (wasmboy: any, wasmboyMemory, state: any) => {
+    wasmboyMemory.set(
+        Uint8Array.from(state.wasmboyMemory.cartridgeRam),
+        wasmboy.CARTRIDGE_RAM_LOCATION);
+
+    wasmboyMemory.set(
+        Uint8Array.from(state.wasmboyMemory.gameBoyMemory),
+        wasmboy.GAMEBOY_INTERNAL_MEMORY_LOCATION);
+
+    wasmboyMemory.set(
+        Uint8Array.from(state.wasmboyMemory.wasmBoyPaletteMemory),
+        wasmboy.GBC_PALETTE_LOCATION);
+
+    wasmboyMemory.set(
+        Uint8Array.from(state.wasmboyMemory.wasmBoyInternalState),
+        wasmboy.WASMBOY_STATE_LOCATION);
+
+    wasmboy.loadState();
+}
+
+export const saveSate = (wasmboy: any, wasmboyMemory) => {
+    wasmboy.saveState();
+
+    return JSON.stringify({
+        wasmboyMemory: {
+            wasmBoyInternalState: Array.from(wasmboyMemory.slice(
+                wasmboy.WASMBOY_STATE_LOCATION,
+                wasmboy.WASMBOY_STATE_LOCATION + wasmboy.WASMBOY_STATE_SIZE
+            )),
+            wasmBoyPaletteMemory: Array.from(wasmboyMemory.slice(
+                wasmboy.GBC_PALETTE_LOCATION,
+                wasmboy.GBC_PALETTE_LOCATION + wasmboy.GBC_PALETTE_SIZE)),
+            gameBoyMemory: Array.from(wasmboyMemory.slice(
+                wasmboy.GAMEBOY_INTERNAL_MEMORY_LOCATION,
+                wasmboy.GAMEBOY_INTERNAL_MEMORY_LOCATION + wasmboy.GAMEBOY_INTERNAL_MEMORY_SIZE
+            )),
+            cartridgeRam: Array.from(wasmboyMemory.slice(
+                wasmboy.CARTRIDGE_RAM_LOCATION,
+                wasmboy.CARTRIDGE_RAM_LOCATION + wasmboy.CARTRIDGE_RAM_SIZE
+            ))
+        }
+    });
+}
+
+interface ControllerState {
+    UP?: boolean
+    RIGHT?: boolean
+    DOWN?: boolean
+    LEFT?: boolean
+    A?: boolean
+    B?: boolean
+    SELECT?: boolean
+    START?: boolean
+}
+
+export const setJoypadState = (wasmboy, controllerState) => {
+    wasmboy.setJoypadState(
+        controllerState.UP ? 1 : 0,
+        controllerState.RIGHT ? 1 : 0,
+        controllerState.DOWN ? 1 : 0,
+        controllerState.LEFT ? 1 : 0,
+        controllerState.A ? 1 : 0,
+        controllerState.B ? 1 : 0,
+        controllerState.SELECT ? 1 : 0,
+        controllerState.START ? 1 : 0);
 }
