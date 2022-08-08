@@ -9,7 +9,7 @@ import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg';
 import { path as ffprobePath } from '@ffprobe-installer/ffprobe';
 
 import { initWasmBoy } from './wasm';
-import { createImageFromFrame, getImageDataFromFrame } from './image';
+import { arraysEqual, createImageFromFrame, getImageDataFromFrame } from './image';
 
 const EXPORT_FPS = 15;
 
@@ -17,6 +17,17 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 ffmpeg.setFfprobePath(ffprobePath);
 
 tmp.setGracefulCleanup();
+
+interface ControllerState {
+    UP?: boolean
+    RIGHT?: boolean
+    DOWN?: boolean
+    LEFT?: boolean
+    A?: boolean
+    B?: boolean
+    SELECT?: boolean
+    START?: boolean
+}
 
 const main = async () => {
     const romFile: string = first(glob.sync('roms/*.gb'));
@@ -61,23 +72,48 @@ const main = async () => {
     console.log(`Emulating...`);
     let frames = 0;
     let images = 1;
+
+    let controllerState: ControllerState = { A: true };
+
     const recordInterval = Math.round(60 / EXPORT_FPS);
+    let currentFrame = [];
+    let previousFrame = [];
+
     for (let second = 0; second < 30; second++) {
         for (let frame = 0; frame < 60; frame++) {
             wasmboy.executeMultipleFrames(1);
+            previousFrame = currentFrame;
+
+            currentFrame = await getImageDataFromFrame(wasmboy, wasmboyMemory);
+            if (!arraysEqual(currentFrame, previousFrame)) {
+                console.log(`Frame ${frames} has changed`);
+            }
 
             if ((frames % recordInterval) == 0) {
                 const file = path.join(framesDir, `${images++}.png`);
-                await createImageFromFrame(await getImageDataFromFrame(wasmboy, wasmboyMemory), file);
+                await createImageFromFrame(currentFrame, file);
             }
 
             frames++;
+
+            if (frames < 4) {
+                wasmboy.setJoypadState(
+                    controllerState.UP ? 1 : 0,
+                    controllerState.RIGHT ? 1 : 0,
+                    controllerState.DOWN ? 1 : 0,
+                    controllerState.LEFT ? 1 : 0,
+                    controllerState.A ? 1 : 0,
+                    controllerState.B ? 1 : 0,
+                    controllerState.SELECT ? 1 : 0,
+                    controllerState.START ? 1 : 0
+                )
+            }
         }
     }
 
     wasmboy.clearAudioBuffer();
 
-    if (!fs.existsSync(saveFile)) {
+    if (fs.existsSync(saveFile)) {
         wasmboy.saveState();
 
         shelljs.mkdir('-p', 'saves');

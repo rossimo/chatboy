@@ -43,6 +43,20 @@ export const getImageDataFromFrame = async (wasmboy: any, wasmByteMemoryArray: U
     return imageDataArray;
 };
 
+export const arraysEqual = (a: any[], b: any[]) => {
+    if (a?.length != b?.length) {
+        return false;
+    }
+
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] != b[i]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 // Function to create an image from output
 export const createImageFromFrame = (imageDataArray, outputPath) => {
     return new Promise<void>((resolve, reject) => {
