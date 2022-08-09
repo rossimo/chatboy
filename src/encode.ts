@@ -8,7 +8,6 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 ffmpeg.setFfprobePath(ffprobePath);
 
 export const encodeFrames = async (inputDir: string, framerate: number) => {
-    shelljs.rm('-rf', 'output');
     shelljs.mkdir('-p', 'output');
 
     await new Promise<void>((res, rej) =>

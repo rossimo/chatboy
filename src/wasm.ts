@@ -1,4 +1,6 @@
 import * as fs from 'fs';
+import * as path from 'path';
+import { createImageFromFrame, getImageDataFromFrame } from './image';
 
 export const initWasmBoy = async () => {
     // Log throttling for our core
@@ -72,10 +74,10 @@ export const loadState = (wasmboy: any, wasmboyMemory, state: any) => {
     wasmboy.loadState();
 }
 
-export const saveSate = (wasmboy: any, wasmboyMemory) => {
+export const saveState = (wasmboy: any, wasmboyMemory) => {
     wasmboy.saveState();
 
-    return JSON.stringify({
+    return {
         wasmboyMemory: {
             wasmBoyInternalState: Array.from(wasmboyMemory.slice(
                 wasmboy.WASMBOY_STATE_LOCATION,
@@ -93,10 +95,10 @@ export const saveSate = (wasmboy: any, wasmboyMemory) => {
                 wasmboy.CARTRIDGE_RAM_LOCATION + wasmboy.CARTRIDGE_RAM_SIZE
             ))
         }
-    });
+    };
 }
 
-interface ControllerState {
+export interface ControllerState {
     UP?: boolean
     RIGHT?: boolean
     DOWN?: boolean
@@ -117,4 +119,42 @@ export const setJoypadState = (wasmboy, controllerState) => {
         controllerState.B ? 1 : 0,
         controllerState.SELECT ? 1 : 0,
         controllerState.START ? 1 : 0);
+};
+
+export const executeAndRecord = async (wasmboy, wasmboyMemory, input: ControllerState, frameCount: number, framesDir: string, recordInterval: number, recordedFrames: number) => {
+    let frame: any[];
+    
+    for (let i = 0; i < frameCount; i++) {
+        setJoypadState(wasmboy, input);
+
+        wasmboy.executeMultipleFrames(1);
+
+        frame = await getImageDataFromFrame(wasmboy, wasmboyMemory);
+    
+        if ((i % recordInterval) == 0) {
+            const file = path.join(framesDir, `${recordedFrames++}.png`);
+            await createImageFromFrame(frame, file);
+        }
+    }
+
+    return {
+        frame,
+        recordedFrames
+    };
+}
+
+export const execute = async (wasmboy, wasmboyMemory, input: ControllerState, frameCount: number) => {
+    let frame: any[];
+
+    for (let i = 0; i < frameCount; i++) {
+        setJoypadState(wasmboy, input);
+
+        wasmboy.executeMultipleFrames(1);
+
+        frame = await getImageDataFromFrame(wasmboy, wasmboyMemory);
+    }
+
+    return {
+        frame
+    }
 }
