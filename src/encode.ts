@@ -14,7 +14,7 @@ export const encodeFrames = async (inputDir: string, framerate: number) => {
         ffmpeg()
             .addOption('-framerate', `${framerate}`)
             .addOption('-i', path.join(inputDir, `%d.png`))
-            .addOption('-vf', `scale=480:-1,format=yuv420p`)
+            .addOption('-vf', `scale=320:-1,format=yuv420p`)
             .addOption('-sws_flags', 'neighbor')
             .output(path.join('output', 'outputfile.mp4'))
             .on('error', rej)
