@@ -121,7 +121,7 @@ export const setJoypadState = (wasmboy, controllerState) => {
         controllerState.START ? 1 : 0);
 };
 
-export const executeAndRecord = async (wasmboy, wasmboyMemory, input: ControllerState, frameCount: number, framesDir: string, recordInterval: number, recordedFrames: number) => {
+export const executeAndRecord = async (wasmboy, wasmboyMemory, input: ControllerState, frameCount: number, totalFrames: number, framesDir: string, recordInterval: number, recordedFrames: number) => {
     let frame: any[];
     
     for (let i = 0; i < frameCount; i++) {
@@ -131,7 +131,7 @@ export const executeAndRecord = async (wasmboy, wasmboyMemory, input: Controller
 
         frame = await getImageDataFromFrame(wasmboy, wasmboyMemory);
     
-        if ((i % recordInterval) == 0) {
+        if (((i + totalFrames) % recordInterval) == 0) {
             const file = path.join(framesDir, `${recordedFrames++}.png`);
             await createImageFromFrame(frame, file);
         }
@@ -139,7 +139,8 @@ export const executeAndRecord = async (wasmboy, wasmboyMemory, input: Controller
 
     return {
         frame,
-        recordedFrames
+        recordedFrames,
+        totalFrames: totalFrames + frameCount
     };
 }
 
@@ -150,9 +151,9 @@ export const execute = async (wasmboy, wasmboyMemory, input: ControllerState, fr
         setJoypadState(wasmboy, input);
 
         wasmboy.executeMultipleFrames(1);
-
-        frame = await getImageDataFromFrame(wasmboy, wasmboyMemory);
     }
+
+    frame = await getImageDataFromFrame(wasmboy, wasmboyMemory);
 
     return {
         frame

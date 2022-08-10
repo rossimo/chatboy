@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as tmp from 'tmp';
 import * as path from 'path';
 import * as glob from 'glob';
-import { first, toLower } from 'lodash';
+import { first, range, toLower } from 'lodash';
 import * as shelljs from 'shelljs';
 import { ActionRowBuilder, Attachment, AttachmentBuilder, ButtonBuilder, ButtonStyle, CacheType, Client, EmbedBuilder, GatewayIntentBits, Interaction, TextChannel } from 'discord.js';
 
@@ -13,7 +13,7 @@ import { ControllerState, execute, executeAndRecord, initWasmBoy, loadRom, loadS
 
 const EXPORT_FPS = 15;
 const MAX_EMULATION_SECONDS = 60;
-const IDLE_EMULATION_SECONDS = 10;
+const IDLE_EMULATION_SECONDS = 8;
 
 const INPUTS: ControllerState[] = [
     { START: true },
@@ -31,10 +31,6 @@ tmp.setGracefulCleanup();
 
 const parseInput = (input: string) => {
     switch (toLower(input)) {
-        case 'start':
-            return { START: true };
-        case 'select':
-            return { SELECT: true };
         case 'a':
             return { A: true };
         case 'b':
@@ -47,6 +43,10 @@ const parseInput = (input: string) => {
             return { LEFT: true };
         case 'right':
             return { RIGHT: true };
+        case 'select':
+            return { SELECT: true };
+        case 'start':
+            return { START: true };
     }
 }
 
@@ -81,67 +81,71 @@ const main = async () => {
         loadState(wasmboy, wasmboyMemory, state);
     }
 
+    wasmboy.executeMultipleFrames(1);
+
     while (true) {
+        const start = new Date();
         console.log(`Emulating...`);
 
         const recordInterval = Math.round(60 / EXPORT_FPS);
         const { name: framesDir } = tmp.dirSync();
 
-        wasmboy.executeMultipleFrames(1);
-
-        let recordedFrames = 1;
+        let recordedFrames = 0;
+        let totalFrames = 0;
 
         for (const playerInput of playerInputs) {
-            const inputResult = await executeAndRecord(wasmboy, wasmboyMemory, playerInput, 4, framesDir, recordInterval, recordedFrames);
+            const inputResult = await executeAndRecord(wasmboy, wasmboyMemory, playerInput, 4, totalFrames, framesDir, recordInterval, recordedFrames);
             recordedFrames = inputResult.recordedFrames;
+            totalFrames = inputResult.totalFrames;
 
-            const waitResult = await executeAndRecord(wasmboy, wasmboyMemory, {}, 56, framesDir, recordInterval, recordedFrames);
-            recordedFrames = waitResult.recordedFrames;
+            if (playerInputs.length > 1) {
+                const waitResult = await executeAndRecord(wasmboy, wasmboyMemory, {}, 26, totalFrames, framesDir, recordInterval, recordedFrames);
+                recordedFrames = waitResult.recordedFrames;
+                totalFrames = waitResult.totalFrames;
+            }
         }
 
         playerInputs = [];
 
-        const state = saveState(wasmboy, wasmboyMemory);
-
-        const inputTests: { wasmboy: any, wasmboyMemory: Uint8Array, input: ControllerState }[] = [];
-        for (const input of INPUTS) {
-            const { wasmboy, wasmboyMemory } = await initWasmBoy();
-            inputTests.push({ wasmboy, wasmboyMemory, input })
-        }
-
-        inputTests.forEach(test => {
-            loadRom(test.wasmboy, test.wasmboyMemory, rom)
-
-            test.wasmboy.config(0, 1, 1, 0, 0, 0, 1, 0, 0, 0);
-
-            loadState(test.wasmboy, test.wasmboyMemory, state);
-        });
-
         /*
-        test: for (let i = 0; i < 60 * MAX_EMULATION_SECONDS; i++) {
-            const controlResult = await executeAndRecord(wasmboy, wasmboyMemory, {}, 1, framesDir, recordInterval, recordedFrames);
-            recordedFrames = controlResult.recordedFrames;
+        let latestIdle
+        test: for (let i = 0; i < 60 * MAX_EMULATION_SECONDS; i = i + 60) {
+            const waitControlResult = await executeAndRecord(wasmboy, wasmboyMemory, {}, 56, totalFrames, framesDir, recordInterval, recordedFrames);
+            recordedFrames = waitControlResult.recordedFrames;
+            totalFrames = waitControlResult.totalFrames;
 
-            for (const inputTest of inputTests) {
-                const testResult = await execute(inputTest.wasmboy, inputTest.wasmboyMemory, inputTest.input, 1);
+            latestIdle = saveState(wasmboy, wasmboyMemory);
+
+            const controlResult = await execute(wasmboy, wasmboyMemory, {}, 4);
+            for (const input of INPUTS) {
+                const test = await initWasmBoy();
+                loadRom(test.wasmboy, test.wasmboyMemory, rom);
+                test.wasmboy.config(0, 1, 1, 0, 0, 0, 1, 0, 0, 0);
+                await loadState(test.wasmboy, test.wasmboyMemory, latestIdle);
+
+                const testResult = await execute(test.wasmboy, test.wasmboyMemory, input, 4);
 
                 if (!arraysEqual(controlResult.frame, testResult.frame)) {
                     break test;
                 }
             }
         }
+
+        await loadState(wasmboy, wasmboyMemory, latestIdle);
         */
 
-        const waitResult = await executeAndRecord(wasmboy, wasmboyMemory, {}, 60 * IDLE_EMULATION_SECONDS, framesDir, recordInterval, recordedFrames);
+        const waitResult = await executeAndRecord(wasmboy, wasmboyMemory, {}, 60 * IDLE_EMULATION_SECONDS, totalFrames, framesDir, recordInterval, recordedFrames);
         recordedFrames = waitResult.recordedFrames;
-
-        wasmboy.clearAudioBuffer();
+        totalFrames = waitResult.totalFrames;
 
         shelljs.mkdir('-p', 'saves');
         fs.writeFileSync(saveFile, JSON.stringify(saveState(wasmboy, wasmboyMemory)));
 
         console.log(`Encoding...`);
         await encodeFrames(framesDir, 60 / recordInterval);
+
+        const end = new Date();
+        console.log(`${(end.getTime() - start.getTime()) / 1000}s`)
 
         console.log(`Sending...`);
 
@@ -150,32 +154,32 @@ const main = async () => {
             .addComponents(
                 new ButtonBuilder()
                     .setCustomId('a')
-                    .setLabel('A')
-                    .setStyle(ButtonStyle.Primary),
+                    .setEmoji('🇦')
+                    .setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder()
                     .setCustomId('b')
-                    .setLabel('B')
-                    .setStyle(ButtonStyle.Primary)
+                    .setEmoji('🇧')
+                    .setStyle(ButtonStyle.Secondary)
             )
 
         const directions = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
                     .setCustomId('up')
-                    .setLabel('Up')
-                    .setStyle(ButtonStyle.Primary),
+                    .setEmoji('⬆️')
+                    .setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder()
                     .setCustomId('down')
-                    .setLabel('Down')
-                    .setStyle(ButtonStyle.Primary),
+                    .setEmoji('⬇️')
+                    .setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder()
                     .setCustomId('left')
-                    .setLabel('Left')
-                    .setStyle(ButtonStyle.Primary),
+                    .setEmoji('⬅️')
+                    .setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder()
                     .setCustomId('Right')
-                    .setLabel('Right')
-                    .setStyle(ButtonStyle.Primary)
+                    .setEmoji('➡️')
+                    .setStyle(ButtonStyle.Secondary)
             );
 
         const menus = new ActionRowBuilder()
@@ -183,11 +187,15 @@ const main = async () => {
                 new ButtonBuilder()
                     .setCustomId('select')
                     .setLabel('Select')
-                    .setStyle(ButtonStyle.Primary),
+                    .setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder()
                     .setCustomId('start')
                     .setLabel('Start')
-                    .setStyle(ButtonStyle.Primary)
+                    .setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder()
+                    .setCustomId('5')
+                    .setLabel('5')
+                    .setStyle(ButtonStyle.Secondary)
             );
 
         await channel.send({
@@ -199,18 +207,31 @@ const main = async () => {
 
 
         console.log(`Waiting...`);
-        const interaction = await new Promise<Interaction<CacheType>>((res, rej) => {
-            client.once('interactionCreate', res);
-        });
+        let multiplier = 1;
+        while (true) {
+            const interaction = await new Promise<Interaction<CacheType>>((res, rej) => {
+                client.once('interactionCreate', res);
+            });
 
-        if (interaction.isButton()) {
-            playerInputs.push(parseInput(interaction.customId));
-            interaction.update({});
+            if (interaction.isButton()) {
+                if (isNumeric(interaction.customId)) {
+                    multiplier = parseInt(interaction.customId);
+                    interaction.update({});
+                } else {
+                    playerInputs = range(0, multiplier).map(() => parseInput(interaction.customId));
+                    interaction.update({});
+                    break;
+                }
+            }
         }
     }
 
     client.destroy();
 }
+
+const isNumeric = (value) => {
+    return /^\d+$/.test(value);
+};
 
 main().catch(err => {
     console.error(err);
