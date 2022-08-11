@@ -34,7 +34,7 @@ export const encodeFrames = async (inputDir: string, framerate: number) => {
         ffmpeg()
             .addInput(path.join('output', `outputfile.mp4`))
             .addInput(path.join('output', `palette.png`))
-            .addOption('-filter_complex', `paletteuse`)
+            .addOption('-filter_complex', `paletteuse`, `-loop`, '-1')
             .output(path.join('output', 'outputfile.gif'))
             .on('error', rej)
             .on('end', res)
