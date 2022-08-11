@@ -11,14 +11,11 @@ import { encodeFrames } from './encode';
 import { ControllerState, execute, executeAndRecord, initWasmBoy, loadRom, loadState, saveState } from './wasm';
 import { arraysEqual } from './image';
 
-const EXPORT_FPS = 12;
-const MAX_EMULATION_SECONDS = 30;
-const IDLE_EMULATION_SECONDS = 4;
+const EXPORT_FPS = 15;
+const MAX_DETECT_IDLE_SECONDS = 7;
+const EXTRA_IDLE_SECONDS = 3;
 
 const INPUTS: ControllerState[] = [
-    { START: true },
-    { SELECT: true },
-    { B: true },
     { A: true },
     { B: true },
     { UP: true },
@@ -68,7 +65,7 @@ const main = async () => {
     const channel = await client.channels.fetch(process.env.DISCORD_CHANNEL_ID) as TextChannel;
     console.log('online');
 
-    const { wasmboy, wasmboyMemory } = await initWasmBoy();
+    let { wasmboy, wasmboyMemory } = await initWasmBoy();
 
     const rom = new Uint8Array(fs.readFileSync(romFile));
     loadRom(wasmboy, wasmboyMemory, rom);
@@ -98,21 +95,20 @@ const main = async () => {
             recordedFrames = inputResult.recordedFrames;
             totalFrames = inputResult.totalFrames;
 
-            if (playerInputs.length > 1) {
-                const waitResult = await executeAndRecord(wasmboy, wasmboyMemory, {}, 26, totalFrames, framesDir, recordInterval, recordedFrames);
-                recordedFrames = waitResult.recordedFrames;
-                totalFrames = waitResult.totalFrames;
-            }
+            const waitResult = await executeAndRecord(wasmboy, wasmboyMemory, {}, 26, totalFrames, framesDir, recordInterval, recordedFrames);
+            recordedFrames = waitResult.recordedFrames;
+            totalFrames = waitResult.totalFrames;
         }
 
         playerInputs = [];
 
-        test: for (let i = 0; i < 60 * MAX_EMULATION_SECONDS; i = i + 60) {
-            const waitControlResult = await executeAndRecord(wasmboy, wasmboyMemory, {}, 56, totalFrames, framesDir, recordInterval, recordedFrames);
+        let state;
+        test: for (let i = 0; i < 60 * MAX_DETECT_IDLE_SECONDS; i = i + 60 * 2) {
+            const waitControlResult = await executeAndRecord(wasmboy, wasmboyMemory, {}, 26, totalFrames, framesDir, recordInterval, recordedFrames);
             recordedFrames = waitControlResult.recordedFrames;
             totalFrames = waitControlResult.totalFrames;
 
-            const state = saveState(wasmboy, wasmboyMemory);
+            state = saveState(wasmboy, wasmboyMemory);
 
             const controlResult = await execute(wasmboy, wasmboyMemory, {}, 4);
             for (const input of INPUTS) {
@@ -129,7 +125,14 @@ const main = async () => {
             }
         }
 
-        const waitResult = await executeAndRecord(wasmboy, wasmboyMemory, {}, 60 * IDLE_EMULATION_SECONDS, totalFrames, framesDir, recordInterval, recordedFrames);
+        if (state) {
+            ({ wasmboy, wasmboyMemory } = await initWasmBoy());
+            loadRom(wasmboy, wasmboyMemory, rom);
+            wasmboy.config(0, 1, 1, 0, 0, 0, 1, 0, 0, 0);
+            await loadState(wasmboy, wasmboyMemory, state);
+        }
+
+        const waitResult = await executeAndRecord(wasmboy, wasmboyMemory, {}, 60 * EXTRA_IDLE_SECONDS, totalFrames, framesDir, recordInterval, recordedFrames);
         recordedFrames = waitResult.recordedFrames;
         totalFrames = waitResult.totalFrames;
 
@@ -160,8 +163,14 @@ const main = async () => {
                 client.once('interactionCreate', res);
             });
 
+
             if (interaction.isButton()) {
-                await message.edit({ components: buttons(true) });
+                if (isNumeric(interaction.customId)) {
+                    // nothing
+                } else {
+                    await message.edit({ components: buttons(true, interaction.customId) });
+                }
+
                 await interaction.update({});
 
                 if (isNumeric(interaction.customId)) {
@@ -170,7 +179,6 @@ const main = async () => {
                     playerInputs = range(0, multiplier).map(() => parseInput(interaction.customId));
                     break;
                 }
-
             }
         }
     }
@@ -182,60 +190,60 @@ const isNumeric = (value) => {
     return /^\d+$/.test(value);
 };
 
-const buttons = (disabled: boolean = false) => {
+const buttons = (disabled: boolean = false, highlight?: string) => {
     const a = new ButtonBuilder()
         .setCustomId('a')
         .setEmoji('🇦')
         .setDisabled(disabled)
-        .setStyle(ButtonStyle.Secondary);
+        .setStyle(highlight == 'a' ? ButtonStyle.Success : ButtonStyle.Secondary);
 
     const b = new ButtonBuilder()
         .setCustomId('b')
         .setEmoji('🇧')
         .setDisabled(disabled)
-        .setStyle(ButtonStyle.Secondary);
+        .setStyle(highlight == 'b' ? ButtonStyle.Success : ButtonStyle.Secondary);
 
     const up = new ButtonBuilder()
         .setCustomId('up')
         .setEmoji('⬆️')
         .setDisabled(disabled)
-        .setStyle(ButtonStyle.Secondary);
+        .setStyle(highlight == 'up' ? ButtonStyle.Success : ButtonStyle.Secondary);
 
     const down = new ButtonBuilder()
         .setCustomId('down')
         .setEmoji('⬇️')
         .setDisabled(disabled)
-        .setStyle(ButtonStyle.Secondary);
+        .setStyle(highlight == 'down' ? ButtonStyle.Success : ButtonStyle.Secondary);
 
     const left = new ButtonBuilder()
         .setCustomId('left')
         .setEmoji('⬅️')
         .setDisabled(disabled)
-        .setStyle(ButtonStyle.Secondary);
+        .setStyle(highlight == 'left' ? ButtonStyle.Success : ButtonStyle.Secondary);
 
     const right = new ButtonBuilder()
         .setCustomId('Right')
         .setEmoji('➡️')
         .setDisabled(disabled)
-        .setStyle(ButtonStyle.Secondary);
+        .setStyle(highlight == 'right' ? ButtonStyle.Success : ButtonStyle.Secondary);
 
     const select = new ButtonBuilder()
         .setCustomId('select')
         .setEmoji('⏺️')
         .setDisabled(disabled)
-        .setStyle(ButtonStyle.Secondary);
+        .setStyle(highlight == 'select' ? ButtonStyle.Success : ButtonStyle.Secondary);
 
     const start = new ButtonBuilder()
         .setCustomId('start')
         .setEmoji('▶️')
         .setDisabled(disabled)
-        .setStyle(ButtonStyle.Secondary);
+        .setStyle(highlight == 'start' ? ButtonStyle.Success : ButtonStyle.Secondary);
 
     const multiply = new ButtonBuilder()
         .setCustomId('5')
         .setEmoji('5️⃣')
         .setDisabled(disabled)
-        .setStyle(ButtonStyle.Secondary);
+        .setStyle(highlight == '5' ? ButtonStyle.Success : ButtonStyle.Secondary);
 
     return [
         new ActionRowBuilder()
