@@ -13,9 +13,9 @@ import { arraysEqual } from './image';
 import { Recording } from './recorder';
 import { isNamedTupleMember } from 'typescript';
 
-const EXPORT_FPS = 60;
+const EXPORT_FPS = 20;
 const MAX_DETECT_IDLE_SECONDS = 3;
-const EXTRA_IDLE_SECONDS = 10;
+const EXTRA_IDLE_SECONDS = 9;
 
 const INPUTS: ControllerState[] = [
     { A: true },
@@ -73,7 +73,7 @@ const main = async () => {
     const rom = new Uint8Array(fs.readFileSync(romFile));
     loadRom(wasmboy, wasmboyMemory, rom);
 
-    wasmboy.config(0, 1, 1, 0, 0, 0, 1, 0, 0, 0);
+    wasmboy.config(0, 1, 1, 0, 0, 0, 1, 1, 0, 0);
 
     if (fs.existsSync(saveFile)) {
         const state = JSON.parse(fs.readFileSync(saveFile).toString());

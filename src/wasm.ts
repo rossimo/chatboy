@@ -123,29 +123,33 @@ export const setJoypadState = (wasmboy, controllerState) => {
         controllerState.START ? 1 : 0);
 };
 
+const FRAMES = 4;
+
 export const executeAndRecord = async (wasmboy, wasmboyMemory, input: ControllerState, frameCount: number, recording: Recording) => {
     let elapsedFrameCount = recording.executedFrameCount % (60 / recording.maxFramerate);
 
-    for (let i = 0; i < frameCount; i++) {
+    for (let i = 0; i < frameCount; i += FRAMES) {
         setJoypadState(wasmboy, input);
 
-        wasmboy.executeMultipleFrames(1);
+        wasmboy.executeMultipleFrames(FRAMES);
 
-        elapsedFrameCount++;
-        const frame = await getImageDataFromFrame(wasmboy, wasmboyMemory);
+        elapsedFrameCount += FRAMES;
 
-        const latest = last(recording.frames);
+        if (recording.frames.length == 0 || elapsedFrameCount >= (60 / recording.maxFramerate)) {
+            const frame = await getImageDataFromFrame(wasmboy, wasmboyMemory);
+            const latest = last(recording.frames);
 
-        if (!latest?.frame || (elapsedFrameCount >= (60 / recording.maxFramerate) && !arraysEqual(latest.frame, frame))) {
-            recording.frames.push({
-                frame,
-                executedFrameCount: recording.executedFrameCount
-            });
+            if (!arraysEqual(latest?.frame, frame)) {
+                recording.frames.push({
+                    frame,
+                    executedFrameCount: recording.executedFrameCount
+                });
 
-            elapsedFrameCount = 0;
+                elapsedFrameCount = 0;
+            }
         }
 
-        recording.executedFrameCount++;
+        recording.executedFrameCount += FRAMES;
     }
 
     return recording;
