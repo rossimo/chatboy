@@ -4,16 +4,18 @@ import * as tmp from 'tmp';
 import * as path from 'path';
 import * as glob from 'glob';
 import * as shelljs from 'shelljs';
-import { first, range, toLower } from 'lodash';
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, CacheType, Client, GatewayIntentBits, Interaction, TextChannel, Message, ButtonInteraction } from 'discord.js';
+import { first, range, toLower, last } from 'lodash';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, CacheType, Client, GatewayIntentBits, Interaction, TextChannel, Message, ButtonInteraction, GuildMember } from 'discord.js';
 
 import { encodeFrames } from './encode';
 import { ControllerState, execute, executeAndRecord, initWasmBoy, loadRom, loadState, saveState } from './wasm';
 import { arraysEqual } from './image';
+import { Recording } from './recorder';
+import { isNamedTupleMember } from 'typescript';
 
-const EXPORT_FPS = 15;
-const MAX_DETECT_IDLE_SECONDS = 7;
-const EXTRA_IDLE_SECONDS = 3;
+const EXPORT_FPS = 60;
+const MAX_DETECT_IDLE_SECONDS = 3;
+const EXTRA_IDLE_SECONDS = 10;
 
 const INPUTS: ControllerState[] = [
     { A: true },
@@ -50,7 +52,8 @@ const parseInput = (input: string) => {
 const main = async () => {
     const args = process.argv.slice(2);
 
-    let playerInputs = args.map(arg => parseInput(arg))
+    let playerInputs = args.map(arg => parseInput(arg));;
+    let player: GuildMember;
 
     const romFile: string = first(glob.sync('roms/*.gb'));
     const saveFile = path.join('saves', path.basename(`${romFile}.sav`));
@@ -81,105 +84,107 @@ const main = async () => {
     wasmboy.executeMultipleFrames(1);
 
     while (true) {
-        const start = new Date();
-        console.log(`Emulating...`);
+        try {
 
-        const recordInterval = Math.round(60 / EXPORT_FPS);
-        const { name: framesDir } = tmp.dirSync();
 
-        let recordedFrames = 0;
-        let totalFrames = 0;
+            let recording: Recording = {
+                maxFramerate: EXPORT_FPS,
+                executedFrameCount: 0,
+                frames: []
+            };
+            const start = new Date();
+            console.log(`Emulating...`);
 
-        for (const playerInput of playerInputs) {
-            const inputResult = await executeAndRecord(wasmboy, wasmboyMemory, playerInput, 4, totalFrames, framesDir, recordInterval, recordedFrames);
-            recordedFrames = inputResult.recordedFrames;
-            totalFrames = inputResult.totalFrames;
+            const button = last(playerInputs);
+            for (const playerInput of playerInputs) {
+                recording = await executeAndRecord(wasmboy, wasmboyMemory, playerInput, 4, recording);
 
-            const waitResult = await executeAndRecord(wasmboy, wasmboyMemory, {}, 26, totalFrames, framesDir, recordInterval, recordedFrames);
-            recordedFrames = waitResult.recordedFrames;
-            totalFrames = waitResult.totalFrames;
-        }
 
-        playerInputs = [];
-
-        let state;
-        test: for (let i = 0; i < 60 * MAX_DETECT_IDLE_SECONDS; i = i + 60 * 2) {
-            const waitControlResult = await executeAndRecord(wasmboy, wasmboyMemory, {}, 26, totalFrames, framesDir, recordInterval, recordedFrames);
-            recordedFrames = waitControlResult.recordedFrames;
-            totalFrames = waitControlResult.totalFrames;
-
-            state = saveState(wasmboy, wasmboyMemory);
-
-            const controlResult = await execute(wasmboy, wasmboyMemory, {}, 4);
-            for (const input of INPUTS) {
-                const test = await initWasmBoy();
-                loadRom(test.wasmboy, test.wasmboyMemory, rom);
-                test.wasmboy.config(0, 1, 1, 0, 0, 0, 1, 0, 0, 0);
-                await loadState(test.wasmboy, test.wasmboyMemory, state);
-
-                const testResult = await execute(test.wasmboy, test.wasmboyMemory, input, 4);
-
-                if (!arraysEqual(controlResult.frame, testResult.frame)) {
-                    break test;
-                }
+                recording = await executeAndRecord(wasmboy, wasmboyMemory, {}, 26, recording);
             }
-        }
 
-        if (state) {
-            ({ wasmboy, wasmboyMemory } = await initWasmBoy());
-            loadRom(wasmboy, wasmboyMemory, rom);
-            wasmboy.config(0, 1, 1, 0, 0, 0, 1, 0, 0, 0);
-            await loadState(wasmboy, wasmboyMemory, state);
-        }
+            playerInputs = [];
 
-        const waitResult = await executeAndRecord(wasmboy, wasmboyMemory, {}, 60 * EXTRA_IDLE_SECONDS, totalFrames, framesDir, recordInterval, recordedFrames);
-        recordedFrames = waitResult.recordedFrames;
-        totalFrames = waitResult.totalFrames;
+            /*
+                    let state;
+                    test: for (let i = 0; i < 60 * MAX_DETECT_IDLE_SECONDS; i = i + 60 * 2) {
+                        recording = await executeAndRecord(wasmboy, wasmboyMemory, {}, 26, recording);
+            
+                        state = saveState(wasmboy, wasmboyMemory);
+            
+                        const controlResult = await execute(wasmboy, wasmboyMemory, {}, 4);
+                        for (const input of INPUTS) {
+                            const test = await initWasmBoy();
+                            loadRom(test.wasmboy, test.wasmboyMemory, rom);
+                            test.wasmboy.config(0, 1, 1, 0, 0, 0, 1, 0, 0, 0);
+                            await loadState(test.wasmboy, test.wasmboyMemory, state);
+            
+                            const testResult = await execute(test.wasmboy, test.wasmboyMemory, input, 4);
+            
+                            if (!arraysEqual(controlResult.frame, testResult.frame)) {
+                                break test;
+                            }
+                        }
+                    }
+            
+                    if (state) {
+                        ({ wasmboy, wasmboyMemory } = await initWasmBoy());
+                        loadRom(wasmboy, wasmboyMemory, rom);
+                        wasmboy.config(0, 1, 1, 0, 0, 0, 1, 0, 0, 0);
+                        await loadState(wasmboy, wasmboyMemory, state);
+                    }
+            */
+            recording = await executeAndRecord(wasmboy, wasmboyMemory, {}, 60 * EXTRA_IDLE_SECONDS, recording);
 
-        const save = saveState(wasmboy, wasmboyMemory);
-        shelljs.mkdir('-p', 'saves');
-        fs.writeFileSync(saveFile, JSON.stringify(save));
+            const save = saveState(wasmboy, wasmboyMemory);
+            shelljs.mkdir('-p', 'saves');
+            fs.writeFileSync(saveFile, JSON.stringify(save));
 
-        console.log(`Encoding...`);
-        await encodeFrames(framesDir, 60 / recordInterval);
+            console.log(`Encoding...`);
+            await encodeFrames(recording);
 
-        const end = new Date();
-        console.log(`${(end.getTime() - start.getTime()) / 1000}s`)
+            const end = new Date();
+            console.log(`${(end.getTime() - start.getTime()) / 1000}s`)
 
-        console.log(`Sending...`);
+            console.log(`Sending...`);
 
-        const message = await channel.send({
-            files: [{
-                attachment: path.resolve(path.join('output', 'outputfile.gif')),
-            }],
-            components: buttons(false),
-        });
-
-
-        console.log(`Waiting...`);
-        let multiplier = 1;
-        while (true) {
-            const interaction = await new Promise<Interaction<CacheType>>((res, rej) => {
-                client.once('interactionCreate', res);
+            const message = await channel.send({
+                content: player && button ? `${player.nickname || player.displayName} pressed ${joyToWord(button)}...` : undefined,
+                files: [{
+                    attachment: path.resolve(path.join('output', 'outputfile.gif')),
+                }],
+                components: buttons(false),
             });
 
 
-            if (interaction.isButton()) {
-                if (isNumeric(interaction.customId)) {
-                    // nothing
-                } else {
-                    await message.edit({ components: buttons(true, interaction.customId) });
-                }
+            console.log(`Waiting...`);
+            let multiplier = 1;
+            while (true) {
+                const interaction = await new Promise<Interaction<CacheType>>((res, rej) => {
+                    client.once('interactionCreate', res);
+                });
 
-                await interaction.update({});
+                if (interaction.isButton()) {
+                    player = client.guilds.cache.get(process.env.DISCORD_GUILD_ID).members.cache.get(interaction.user.id);
 
-                if (isNumeric(interaction.customId)) {
-                    multiplier = parseInt(interaction.customId);
-                } else {
-                    playerInputs = range(0, multiplier).map(() => parseInput(interaction.customId));
-                    break;
+                    if (isNumeric(interaction.customId)) {
+                        // nothing
+                    } else {
+                        await message.edit({ components: buttons(true, interaction.customId) });
+                    }
+
+                    await interaction.update({});
+
+                    if (isNumeric(interaction.customId)) {
+                        multiplier = parseInt(interaction.customId);
+                    } else {
+                        playerInputs = range(0, multiplier).map(() => parseInput(interaction.customId));
+                        break;
+                    }
                 }
             }
+        } catch (err) {
+            console.error(err);
         }
     }
 
@@ -239,11 +244,17 @@ const buttons = (disabled: boolean = false, highlight?: string) => {
         .setDisabled(disabled)
         .setStyle(highlight == 'start' ? ButtonStyle.Success : ButtonStyle.Secondary);
 
-    const multiply = new ButtonBuilder()
+    const multiply5 = new ButtonBuilder()
         .setCustomId('5')
         .setEmoji('5️⃣')
         .setDisabled(disabled)
         .setStyle(highlight == '5' ? ButtonStyle.Success : ButtonStyle.Secondary);
+
+    const multiply10 = new ButtonBuilder()
+        .setCustomId('10')
+        .setEmoji('🔟')
+        .setDisabled(disabled)
+        .setStyle(highlight == '10' ? ButtonStyle.Success : ButtonStyle.Secondary);
 
     return [
         new ActionRowBuilder()
@@ -256,9 +267,21 @@ const buttons = (disabled: boolean = false, highlight?: string) => {
             ),
         new ActionRowBuilder()
             .addComponents(
-                select, start, multiply
+                select, start, multiply5, multiply10
             )
     ] as any[];
+};
+
+
+const joyToWord = (input: ControllerState) => {
+    if (input.A) return 'A';
+    if (input.B) return 'B';
+    if (input.UP) return 'Up';
+    if (input.DOWN) return 'Down';
+    if (input.LEFT) return 'Left';
+    if (input.RIGHT) return 'Right';
+    if (input.START) return 'Start';
+    if (input.SELECT) return 'Select';
 }
 
 main().catch(err => {

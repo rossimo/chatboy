@@ -3,3 +3,5 @@ roms
 output
 saves
 .env
+frames.txt
+palette.png

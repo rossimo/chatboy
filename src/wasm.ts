@@ -1,6 +1,8 @@
 import * as fs from 'fs';
+import { last } from 'lodash';
 import * as path from 'path';
-import { createImageFromFrame, getImageDataFromFrame } from './image';
+import { arraysEqual, createImageFromFrame, getImageDataFromFrame } from './image';
+import { Recording } from './recorder';
 
 export const initWasmBoy = async () => {
     // Log throttling for our core
@@ -121,27 +123,32 @@ export const setJoypadState = (wasmboy, controllerState) => {
         controllerState.START ? 1 : 0);
 };
 
-export const executeAndRecord = async (wasmboy, wasmboyMemory, input: ControllerState, frameCount: number, totalFrames: number, framesDir: string, recordInterval: number, recordedFrames: number) => {
-    let frame: any[];
-    
+export const executeAndRecord = async (wasmboy, wasmboyMemory, input: ControllerState, frameCount: number, recording: Recording) => {
+    let elapsedFrameCount = recording.executedFrameCount % (60 / recording.maxFramerate);
+
     for (let i = 0; i < frameCount; i++) {
         setJoypadState(wasmboy, input);
 
         wasmboy.executeMultipleFrames(1);
 
-        frame = await getImageDataFromFrame(wasmboy, wasmboyMemory);
-    
-        if (((i + totalFrames) % recordInterval) == 0) {
-            const file = path.join(framesDir, `${recordedFrames++}.png`);
-            await createImageFromFrame(frame, file);
+        elapsedFrameCount++;
+        const frame = await getImageDataFromFrame(wasmboy, wasmboyMemory);
+
+        const latest = last(recording.frames);
+
+        if (!latest?.frame || (elapsedFrameCount >= (60 / recording.maxFramerate) && !arraysEqual(latest.frame, frame))) {
+            recording.frames.push({
+                frame,
+                executedFrameCount: recording.executedFrameCount
+            });
+
+            elapsedFrameCount = 0;
         }
+
+        recording.executedFrameCount++;
     }
 
-    return {
-        frame,
-        recordedFrames,
-        totalFrames: totalFrames + frameCount
-    };
+    return recording;
 }
 
 export const execute = async (wasmboy, wasmboyMemory, input: ControllerState, frameCount: number) => {

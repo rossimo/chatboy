@@ -4,7 +4,9 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "start": "ts-node src/index.ts"
+    "start": "ts-node src/index.ts",
+    "server:prep": "pm2 install typescript",
+    "server": "pm2 start src/index.ts"
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
@@ -20,6 +22,7 @@
     "fluent-ffmpeg": "^2.1.2",
     "glob": "^8.0.3",
     "lodash": "^4.17.21",
+    "pm2": "^5.2.0",
     "pngjs-image": "^0.11.7",
     "shelljs": "^0.8.5",
     "tmp": "^0.2.1",
