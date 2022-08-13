@@ -15,7 +15,7 @@ import { isNamedTupleMember } from 'typescript';
 
 const EXPORT_FPS = 20;
 const MAX_DETECT_IDLE_SECONDS = 3;
-const EXTRA_IDLE_SECONDS = 9;
+const EXTRA_IDLE_SECONDS = 10;
 
 const INPUTS: ControllerState[] = [
     { A: true },
