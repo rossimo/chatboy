@@ -16,11 +16,13 @@ export const encodeFrames = async (recording: Recording) => {
 
     const { name: tmpDir } = tmp.dirSync();
 
+    const imageTasks = [];
     let framesTxt = '';
     for (let i = 0; i < recording.frames.length; i++) {
         const current = recording.frames[i];
         let file = path.resolve(path.join(tmpDir, `${i + 1}.png`));
-        await createImageFromFrame(current.frame, file);
+
+        imageTasks.push(createImageFromFrame(current.frame, file));
 
         framesTxt += `file '${file}'\n`;
 
@@ -30,16 +32,18 @@ export const encodeFrames = async (recording: Recording) => {
         }
     }
 
+    await Promise.all(imageTasks);
+
     framesTxt += `duration 5\nfile '${path.resolve(path.join(tmpDir, `${recording.frames.length}.png`))}'\n`
 
-    fs.writeFileSync('frames.txt', framesTxt)
+    fs.writeFileSync('frames.txt', framesTxt);
 
     await new Promise<void>((res, rej) =>
         ffmpeg()
             .input('frames.txt')
             .addInputOption('-safe', '0')
             .inputFormat('concat')
-            .addOption('-vf', 'palettegen=24', 'palette.png')
+            .addOption('-filter_complex', `scale=320:-1:flags=neighbor,split=2 [a][b]; [a] palettegen=24 [pal]; [b] fifo [b]; [b] [pal] paletteuse`)
             .output(path.join('output', 'outputfile.gif'))
             .on('error', (err, stdout, stderr) => {
                 console.log(stdout)
@@ -49,20 +53,5 @@ export const encodeFrames = async (recording: Recording) => {
             .on('end', res)
             .run());
 
-
-    await new Promise<void>((res, rej) =>
-        ffmpeg()
-            .input('frames.txt')
-            .addInputOption('-safe', '0')
-            .inputFormat('concat')
-            .addInput('palette.png')
-            .addOption('-filter_complex', `scale=320:-1:flags=neighbor[x];[x][1:v]paletteuse`)
-            .output(path.join('output', 'outputfile.gif'))
-            .on('error', (err, stdout, stderr) => {
-                console.log(stdout)
-                console.error(stderr);
-                rej(err)
-            })
-            .on('end', res)
-            .run());
+    shelljs.rm('-rf', tmpDir);
 }
