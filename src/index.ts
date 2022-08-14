@@ -14,8 +14,8 @@ import { Recording } from './recorder';
 import { isNamedTupleMember } from 'typescript';
 
 const EXPORT_FPS = 20;
-const MAX_DETECT_IDLE_SECONDS = 9;
-const EXTRA_IDLE_SECONDS = 1;
+const MAX_DETECT_IDLE_SECONDS = 8;
+const EXTRA_IDLE_SECONDS = 2;
 
 const INPUTS: ControllerState[] = [
     { A: true },
@@ -99,7 +99,7 @@ const main = async () => {
             for (const playerInput of playerInputs) {
                 recording = await executeAndRecord(wasmboy, wasmboyMemory, playerInput, 4, recording);
 
-                recording = await executeAndRecord(wasmboy, wasmboyMemory, {}, 26, recording);
+                recording = await executeAndRecord(wasmboy, wasmboyMemory, {}, 16, recording);
             }
 
             playerInputs = [];
