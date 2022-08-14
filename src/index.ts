@@ -99,7 +99,6 @@ const main = async () => {
             for (const playerInput of playerInputs) {
                 recording = await executeAndRecord(wasmboy, wasmboyMemory, playerInput, 4, recording);
 
-
                 recording = await executeAndRecord(wasmboy, wasmboyMemory, {}, 26, recording);
             }
 
@@ -167,13 +166,17 @@ const main = async () => {
                 if (interaction.isButton()) {
                     player = client.guilds.cache.get(process.env.DISCORD_GUILD_ID).members.cache.get(interaction.user.id);
 
+                    let update = new Promise(res => res({}));
+
                     if (isNumeric(interaction.customId)) {
                         // nothing
                     } else {
-                        await message.edit({ components: buttons(true, interaction.customId) });
+                        update = update.then(() => message.edit({ components: buttons(true, interaction.customId) }));
                     }
 
-                    await interaction.update({});
+                    update = update.then(() => interaction.update({}));
+
+                    update.catch(err => console.warn(err));
 
                     if (isNumeric(interaction.customId)) {
                         multiplier = parseInt(interaction.customId);
