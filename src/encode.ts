@@ -34,7 +34,7 @@ export const encodeFrames = async (recording: Recording) => {
 
     await Promise.all(imageTasks);
 
-    framesTxt += `duration 5\nfile '${path.resolve(path.join(tmpDir, `${recording.frames.length}.png`))}'\n`
+    framesTxt += `duration 6\nfile '${path.resolve(path.join(tmpDir, `${recording.frames.length}.png`))}'\n`
 
     fs.writeFileSync('frames.txt', framesTxt);
 
