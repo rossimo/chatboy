@@ -14,8 +14,8 @@ import { Recording } from './recorder';
 import { isNamedTupleMember } from 'typescript';
 
 const EXPORT_FPS = 20;
-const MAX_DETECT_IDLE_SECONDS = 3;
-const EXTRA_IDLE_SECONDS = 10;
+const MAX_DETECT_IDLE_SECONDS = 9;
+const EXTRA_IDLE_SECONDS = 1;
 
 const INPUTS: ControllerState[] = [
     { A: true },
@@ -104,40 +104,36 @@ const main = async () => {
 
             playerInputs = [];
 
-            /*
-                    let state;
-                    test: for (let i = 0; i < 60 * MAX_DETECT_IDLE_SECONDS; i = i + 60 * 2) {
-                        recording = await executeAndRecord(wasmboy, wasmboyMemory, {}, 26, recording);
-            
-                        state = saveState(wasmboy, wasmboyMemory);
-            
-                        const controlResult = await execute(wasmboy, wasmboyMemory, {}, 4);
-                        for (const input of INPUTS) {
-                            const test = await initWasmBoy();
-                            loadRom(test.wasmboy, test.wasmboyMemory, rom);
-                            test.wasmboy.config(0, 1, 1, 0, 0, 0, 1, 0, 0, 0);
-                            await loadState(test.wasmboy, test.wasmboyMemory, state);
-            
-                            const testResult = await execute(test.wasmboy, test.wasmboyMemory, input, 4);
-            
-                            if (!arraysEqual(controlResult.frame, testResult.frame)) {
-                                break test;
-                            }
-                        }
-                    }
-            
-                    if (state) {
-                        ({ wasmboy, wasmboyMemory } = await initWasmBoy());
-                        loadRom(wasmboy, wasmboyMemory, rom);
-                        wasmboy.config(0, 1, 1, 0, 0, 0, 1, 0, 0, 0);
-                        await loadState(wasmboy, wasmboyMemory, state);
-                    }
-            */
-            recording = await executeAndRecord(wasmboy, wasmboyMemory, {}, 60 * EXTRA_IDLE_SECONDS, recording);
 
-            const save = saveState(wasmboy, wasmboyMemory);
-            shelljs.mkdir('-p', 'saves');
-            fs.writeFileSync(saveFile, JSON.stringify(save));
+            let state;
+            test: for (let i = 0; i < MAX_DETECT_IDLE_SECONDS; i++) {
+                recording = await executeAndRecord(wasmboy, wasmboyMemory, {}, 52, recording);
+
+                state = saveState(wasmboy, wasmboyMemory);
+
+                const controlResult = await execute(wasmboy, wasmboyMemory, {}, 8);
+                for (const input of INPUTS) {
+                    const test = await initWasmBoy();
+                    loadRom(test.wasmboy, test.wasmboyMemory, rom);
+                    test.wasmboy.config(0, 1, 1, 0, 0, 0, 1, 1, 0, 0);
+                    await loadState(test.wasmboy, test.wasmboyMemory, state);
+
+                    const testResult = await execute(test.wasmboy, test.wasmboyMemory, input, 8);
+
+                    if (!arraysEqual(controlResult.frame, testResult.frame)) {
+                        break test;
+                    }
+                }
+            }
+
+            if (state) {
+                ({ wasmboy, wasmboyMemory } = await initWasmBoy());
+                loadRom(wasmboy, wasmboyMemory, rom);
+                wasmboy.config(0, 1, 1, 0, 0, 0, 1, 1, 0, 0);
+                await loadState(wasmboy, wasmboyMemory, state);
+            }
+
+            recording = await executeAndRecord(wasmboy, wasmboyMemory, {}, 60 * EXTRA_IDLE_SECONDS, recording);
 
             console.log(`Encoding...`);
             await encodeFrames(recording);
@@ -155,6 +151,10 @@ const main = async () => {
                 components: buttons(false),
             });
 
+
+            const save = saveState(wasmboy, wasmboyMemory);
+            shelljs.mkdir('-p', 'saves');
+            fs.writeFileSync(saveFile, JSON.stringify(save));
 
             console.log(`Waiting...`);
             let multiplier = 1;
