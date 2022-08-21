@@ -12,7 +12,7 @@ import { ControllerState, execute, executeAndRecord, initWasmBoy, loadRom, loadS
 import { arraysEqual } from './image';
 import { Recording } from './recorder';
 
-const EXPORT_FPS = 20;
+const EXPORT_FPS = 60;
 const MAX_DETECT_IDLE_SECONDS = 8;
 const EXTRA_IDLE_SECONDS = 2;
 
