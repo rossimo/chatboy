@@ -1,8 +1,3 @@
-import { WasmBoy } from 'wasmboy';
-
-// Image Creation
-const PNGImage = require('pngjs-image');
-
 // Define some constants
 export const GAMEBOY_CAMERA_WIDTH = 160;
 export const GAMEBOY_CAMERA_HEIGHT = 144;
@@ -56,37 +51,3 @@ export const arraysEqual = (a: any[], b: any[]) => {
 
     return true;
 }
-
-// Function to create an image from output
-export const createImageFromFrame = (imageDataArray, outputPath) => {
-    return new Promise<void>((resolve, reject) => {
-        // https://www.npmjs.com/package/pngjs-image
-        const image = PNGImage.createImage(GAMEBOY_CAMERA_WIDTH, GAMEBOY_CAMERA_HEIGHT);
-
-        // Write our pixel values
-        for (let i = 0; i < imageDataArray.length - 4; i = i + 4) {
-            // Since 4 indexes represent 1 pixels. divide i by 4
-            const pixelIndex = i / 4;
-
-            // Get our y value from i
-            const y = Math.floor(pixelIndex / GAMEBOY_CAMERA_WIDTH);
-
-            // Get our x value from i
-            const x = pixelIndex % GAMEBOY_CAMERA_WIDTH;
-
-            image.setAt(x, y, {
-                red: imageDataArray[i],
-                green: imageDataArray[i + 1],
-                blue: imageDataArray[i + 2],
-                alpha: imageDataArray[i + 3]
-            });
-        }
-
-        image.writeImage(outputPath, function (err) {
-            if (err) {
-                reject(err);
-            }
-            resolve();
-        });
-    });
-};
