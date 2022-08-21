@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import { last } from 'lodash';
 import * as path from 'path';
-import { arraysEqual, createImageFromFrame, getImageDataFromFrame } from './image';
+import { arraysEqual, getImageDataFromFrame } from './image';
 import { Recording } from './recorder';
 
 export const initWasmBoy = async () => {
