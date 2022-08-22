@@ -14,25 +14,20 @@ ffmpeg.setFfprobePath(ffprobePath);
 export const encodeFrames = async (recording: Recording) => {
     shelljs.mkdir('-p', 'output');
 
-    const { name: tmpDir } = tmp.dirSync();
+    const { tmpDir } = recording;
 
     const imageTasks = [];
     let framesTxt = '';
     for (let i = 0; i < recording.frames.length; i++) {
         const current = recording.frames[i];
-        let file = path.resolve(path.join(tmpDir, `${i + 1}.png`));
 
-        imageTasks.push(await sharp(new Uint8Array(current.frame), {
-            raw: {
-                width: 160,
-                height: 144,
-                channels: 4
-            }
-        }).resize({ width: 320, height: 288, fit: sharp.fit.fill, kernel: sharp.kernel.nearest }).toFile(file));
+        let file = path.resolve(path.join(recording.tmpDir, `${i + 1}.png`));
+
+        imageTasks.push(current.task);
 
         framesTxt += `file '${file}'\n`;
 
-        const next = recording.frames[i + 1]
+        const next = recording.frames[i + 1];
         if (next) {
             framesTxt += `duration ${(next.executedFrameCount - recording.frames[i].executedFrameCount) / 60}\n`;
         }
@@ -59,5 +54,5 @@ export const encodeFrames = async (recording: Recording) => {
             .on('end', res)
             .run());
 
-    shelljs.rm('-rf', tmpDir);
+    shelljs.rm('-rf', recording.tmpDir);
 }

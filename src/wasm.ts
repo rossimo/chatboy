@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import { last } from 'lodash';
 import * as path from 'path';
+import * as sharp from 'sharp';
 import { arraysEqual, getImageDataFromFrame } from './image';
 import { Recording } from './recorder';
 
@@ -140,9 +141,18 @@ export const executeAndRecord = async (wasmboy, wasmboyMemory, input: Controller
             const latest = last(recording.frames);
 
             if (!arraysEqual(latest?.frame, frame)) {
+                let file = path.resolve(path.join(recording.tmpDir, `${recording.frames.length + 1}.png`));
+
                 recording.frames.push({
                     frame,
-                    executedFrameCount: recording.executedFrameCount
+                    executedFrameCount: recording.executedFrameCount,
+                    task: sharp(new Uint8Array(frame), {
+                        raw: {
+                            width: 160,
+                            height: 144,
+                            channels: 4
+                        }
+                    }).resize({ width: 320, height: 288, fit: sharp.fit.fill, kernel: sharp.kernel.nearest }).toFile(file)
                 });
 
                 elapsedFrameCount = 0;
