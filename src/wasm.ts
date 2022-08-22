@@ -152,7 +152,7 @@ export const executeAndRecord = async (wasmboy, wasmboyMemory, input: Controller
                             height: 144,
                             channels: 4
                         }
-                    }).resize({ width: 320, height: 288, fit: sharp.fit.fill, kernel: sharp.kernel.nearest }).toFile(file)
+                    }).toFile(file)
                 });
 
                 elapsedFrameCount = 0;

@@ -44,7 +44,7 @@ export const encodeFrames = async (recording: Recording) => {
             .input('frames.txt')
             .addInputOption('-safe', '0')
             .inputFormat('concat')
-            .addOption('-filter_complex', `split=2 [a][b]; [a] palettegen=reserve_transparent=off [pal]; [b] fifo [b]; [b] [pal] paletteuse`)
+            .addOption('-filter_complex', `scale=320:-1:flags=neighbor,split=2 [a][b]; [a] palettegen=reserve_transparent=off [pal]; [b] fifo [b]; [b] [pal] paletteuse`)
             .output(path.join('output', 'outputfile.gif'))
             .on('error', (err, stdout, stderr) => {
                 console.log(stdout)
